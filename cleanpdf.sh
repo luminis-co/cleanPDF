@@ -262,12 +262,12 @@ log_info "Size awal: $(numfmt --to=iec "$(stat -c%s "$INPUT")")"
 case "$MODE_MAIN" in 
   sanitize)
     case "$MODE_SUB" in
-      normal) sanitize_normal "$INPUT" "$OUTPUT"
-      strong) sanitize_strong "$INPUT" "$OUTPUT"
-      ultra) sanitize_ultra "$INPUT" "$OUTPUT"
-      pdfa) sanitize_pdfa "$INPUT" "$OUTPUT"
-      flatten) sanitize_flatten "$INPUT" "$OUTPUT"
-      *) log_error "Mode tidak tersedia. Hanya mode ini 'normal' | 'strong' | 'ultra' | 'pdfa' | 'flatten' yang tersedia";
+      normal) sanitize_normal "$INPUT" "$OUTPUT" ;;
+      strong) sanitize_strong "$INPUT" "$OUTPUT" ;;
+      ultra) sanitize_ultra "$INPUT" "$OUTPUT" ;;
+      pdfa) sanitize_pdfa "$INPUT" "$OUTPUT" ;;
+      flatten) sanitize_flatten "$INPUT" "$OUTPUT" ;;
+      *) log_error "Mode tidak tersedia. Hanya mode ini 'normal' | 'strong' | 'ultra' | 'pdfa' | 'flatten' yang tersedia";;
     esac
     ;;
   compress)
