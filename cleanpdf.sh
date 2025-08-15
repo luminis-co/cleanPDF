@@ -14,15 +14,15 @@ log_time(){
     date '+%Y-%m-%d %H:%M:%S';
 }
 log_info (){
-    echo -e "\e[32m[INFO]  $(date '+%Y-%m-%d %H:%M:%S')\e[0m $*";
+    echo -e "\e[32m[INFO]  - \e[0m $*";
 }
 
 log_warn(){
-    echo -e  "\e[33m[WARN]  $(date '+%Y-%m-%d %H:%M:%S')\e[0m $*";
+    echo -e  "\e[33m[WARN]  - \e[0m $*";
 }
 
 log_error(){
-    echo -e "\e[31m[ERROR] $(date '+%Y-%m-%d %H:%M:%S')\e[0m $*" >&2;
+    echo -e "\e[31m[ERROR] - \e[0m $*" >&2;
 }
 # ---- Helpers ----
 usage() {
@@ -36,7 +36,6 @@ usage() {
     strong  : PostScript round-trip (ps2write → pdfwrite). Menghapus form, layer, JS sepenuhnya.
     ultra   : Rasterisasi → ubah halaman jadi gambar, lalu buat PDF baru. Aman total, teks hilang.
     pdfa    : [opsi tambahan] Konversi ke PDF/A-2b untuk arsip jangka panjang, bebas konten aktif.
-    flatten : [opsi tambahan] Flatten form dan anotasi tanpa rasterisasi penuh.
 
   Compress modes (mengurangi ukuran PDF):
     auto    : Kompres otomatis hingga mendekati target max-size.
@@ -84,6 +83,7 @@ check_tools(){
 # ---- Sanitize (Normal/Strong/Ultra) ----
 sanitize_normal(){
     local in_file="$1"; local out_file="$2"
+    log_info "  [*] Ghostscript Rewrite"
     gs -dNOPAUSE -dBATCH -dSAFER \
        -sDEVICE=pdfwrite \
        -dCompatibilityLevel=1.4 \
@@ -98,6 +98,7 @@ sanitize_strong(){
     local temp_ps=$(mktemp /tmp/pdf_sanitize.XXXXXX.ps)
     local temp_pdf=$(mktemp /tmp/pdf_sanitize.XXXXXX.pdf)
     trap 'rm -f "$temp_ps" "$temp_pdf"' RETURN
+    log_info "  [*] PostScript Round-Trip"
 
     log_info "  [1/3] Flatten ke PostScript..."
     gs -dNOPAUSE -dBATCH -dSAFER \
@@ -120,7 +121,7 @@ sanitize_ultra(){
     local in_file="$1"; local out_file="$2"; local dpi="${3:-300}"
     local tmp_dir; tmp_dir=$(mktemp -d /tmp/pdf_ultra.XXXXXX)
 
-    trap 'rm -rm "$tmp_dir"' RETURN
+    trap 'rm -f "$tmp_dir"' RETURN
 
     log_info "  [1/4] Ekstrak halaman jadi gambar PNG..."
     pdftoppm -r "$dpi" -png "$in_file" "$tmp_dir/page" >/dev/null 2>&1
@@ -159,25 +160,6 @@ sanitize_pdfa(){
     mv -f "$temp_pdf" "$out_file"
 }
 
-sanitize_flatten(){
-  local in_file="$1"
-  local out_file="$2"
-  local temp_pdf=$(mktemp /tmp/pdf_sanitize.XXXXXX.pdf)
-  trap 'rm -f "$temp_pdf"' RETURN
-
-  log_info "  [*] Flattening PDF (GhostScript)..."
-  gs -o "$tmp_pdf" \
-      -sDEVICE=pdfwrite \
-      -dCompatibilityLevel=1.4 \
-      -dPDFSETTINGS=/prepress \
-      -dDetectDuplicateImages=true \
-      -dCompressFonts=true \
-      -dNOPAUSE -dBATCH \
-      -dFILTERTEXT -dFILTERIMAGE \
-      "$in_file"
-  log_info "  [3/3] Simpan hasil akhir..."
-  mv -f "$temp_pdf" "$out_file"
-}
 # ---- Compress ----
 compress_scan(){
     local in_file="$1"; local out_file="$2"; local dpi="${3:-200}"
@@ -230,7 +212,7 @@ fi
 MODE_MAIN="$1"
 
 if [[ "$MODE_MAIN" == "sanitize" ]]; then
-  if [[ "${2:-}" == "normal" || "${2:-}" == "strong" || "${2:-}" == "ultra" || "${2:-}" ==  "pdfa" || "${2:-}" == "flatten" ]]; then
+  if [[ "${2:-}" == "normal" || "${2:-}" == "strong" || "${2:-}" == "ultra" || "${2:-}" ==  "pdfa" ]]; then
     MODE_SUB="$2"; INPUT="$3"; OUTPUT="$4"; QUALITY="${5:-$DEFAULT_QUALITY}"
     [[ "${6:-}" == --max-size=* ]] && MAX_SIZE="${6#--max-size=}" || MAX_SIZE="$DEFAULT_MAX_SIZE"
   else
@@ -254,6 +236,8 @@ check_tools
 require_file_readable "$INPUT"
 ensure_output_dir "$OUTPUT"
 
+log_time
+
 log_info "Mode: $MODE_MAIN | Module: $MODE_SUB | Quality: $QUALITY | Max: $MAX_SIZE"
 log_info "Size awal: $(numfmt --to=iec "$(stat -c%s "$INPUT")")"
 
@@ -266,7 +250,6 @@ case "$MODE_MAIN" in
       strong) sanitize_strong "$INPUT" "$OUTPUT" ;;
       ultra) sanitize_ultra "$INPUT" "$OUTPUT" ;;
       pdfa) sanitize_pdfa "$INPUT" "$OUTPUT" ;;
-      flatten) sanitize_flatten "$INPUT" "$OUTPUT" ;;
       *) log_error "Mode tidak tersedia. Hanya mode ini 'normal' | 'strong' | 'ultra' | 'pdfa' | 'flatten' yang tersedia";;
     esac
     ;;
