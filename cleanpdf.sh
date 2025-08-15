@@ -145,7 +145,7 @@ sanitize_pdfa(){
   local in_file="$1"
   local out_file="$2"
   local temp_pdf=$(mktemp /tmp/pdf_sanitize.XXXXXX.pdf)
-  trap 'rm -f "$temp_ps" "$temp_pdf"' RETURN
+  trap 'rm -f "$temp_pdf"' RETURN
 
   log_info "  [*] Converting to PDF/A (GhostScript)..."
   gs -dPDFA=2 \
@@ -163,7 +163,7 @@ sanitize_flatten(){
   local in_file="$1"
   local out_file="$2"
   local temp_pdf=$(mktemp /tmp/pdf_sanitize.XXXXXX.pdf)
-  trap 'rm -f "$temp_ps" "$temp_pdf"' RETURN
+  trap 'rm -f "$temp_pdf"' RETURN
 
   log_info "  [*] Flattening PDF (GhostScript)..."
   gs -o "$tmp_pdf" \
