@@ -116,31 +116,35 @@ sanitize_strong(){
     log_info "  [3/3] Simpan hasil akhir..."
     mv -f "$temp_pdf" "$out_file"
 }
-
 sanitize_ultra(){
-    local in_file="$1"; local out_file="$2"; local dpi="${3:-300}"
-    local tmp_dir; tmp_dir=$(mktemp -d /tmp/pdf_ultra.XXXXXX)
+    local in_file="$1"
+    local out_file="$2"
+    local dpi="${3:-300}"
 
-    trap 'rm -f "$tmp_dir"' RETURN
+    local tmp_dir
+    tmp_dir=$(mktemp -d /tmp/pdf_ultra_XXXXXX)
+    trap 'rm -rf "$tmp_dir"' RETURN
 
-    log_info "  [1/4] Ekstrak halaman jadi gambar PNG..."
-    pdftoppm -r "$dpi" -png "$in_file" "$tmp_dir/page" >/dev/null 2>&1
-
-    log_info "  [2/4] Buat PDF dari gambar..."
-    img2pdf "$tmp_dir"/*.png -o "$tmp_dir/image_only.pdf"
-
-    log_info "  [3/4] Bersihkan metadata..."
+    log_info "  [1/4] Konversi PDF menjadi gambar PNG..."
     gs -dNOPAUSE -dBATCH -dSAFER \
-       -sDEVICE=pdfwrite \
-       -dCompatibilityLevel=1.4 \
-       -dDetectDuplicateImages=true \
-       -dCompressFonts=true \
-       -sOutputFile="$tmp_dir/clean.pdf" \
-       "$tmp_dir/image_only.pdf" >/dev/null 2>&1
+       -sDEVICE=png16m \
+       -r"$dpi" \
+       -o "$tmp_dir/page_%03d.png" \
+       "$in_file"
 
-    log_info "  [4/4] Simpan hasil akhir..."
-    mv -f "$tmp_dir/clean.pdf" "$out_file"
+    log_info "  [2/4] Gabungkan gambar jadi PDF raster..."
+    img2pdf "$tmp_dir"/page_*.png -o "$tmp_dir/rasterized.pdf"
+
+    log_info "  [3/4] OCR hasil rasterisasi → PDF/A aman & searchable..."
+    ocrmypdf --force-ocr --clean \
+             --output-type pdfa \
+             --optimize 3 \
+             --jpeg-quality 85 \
+             "$tmp_dir/rasterized.pdf" "$out_file"
+
+    log_info "  [4/4] Selesai. Output di: $out_file"
 }
+
 
 sanitize_pdfa(){
   local in_file="$1"
