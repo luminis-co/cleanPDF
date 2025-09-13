@@ -7,7 +7,7 @@ set -euo pipefail
 DEFAULT_QUALITY="ebook"
 DEFAULT_MAX_SIZE="30M"
 DEFAULT_SANITIZE_SUB="strong"
-DEFAULT_COMPRESS_SUB="scan"
+DEFAULT_COMPRESS_SUB="moderate"
 
 # ---- Logging Functions ----
 log_time(){
@@ -43,7 +43,7 @@ usage() {
 
   Options:
     quality         : Tingkat kualitas (screen | ebook | printer | prepress). Default: ebook.
-    --max-size=<s>  : Target ukuran maksimum (contoh: 5M, 20M). Default: 10M.
+    --max-size=<s>  : Target ukuran maksimum (contoh: 5M, 20M). Default: 30M.
   
   Examples:
     ./cleanpdf.sh sanitize normal file.pdf clean.pdf
@@ -154,7 +154,7 @@ sanitize_pdfa(){
 
   log_info "  [*] Converting to PDF/A (GhostScript)..."
   gs -dPDFA=2 \
-      -dBATCH -dNOPAUSE -dNOOUTERSAVE -dNOSAFER \
+      -dBATCH -dNOPAUSE -dNOOUTERSAVE -dSAFER \
       -sProcessColorModel=DeviceRGB \
       -sDEVICE=pdfwrite \
       -dPDFACompatibilityPolicy=1 \
@@ -190,7 +190,87 @@ compress_scan(){
         log_info "  [3/3] Simpan hasil akhir..."
         mv "$tmp_pdf" "$out_file"
 }
+compress_light(){
+  local in_file="$1"; local out_file="$2"; local dpi="${3:-200}"
+  local tmp_pdf=$(mktemp /tmp/pdf_scan_compress.XXXXXX.pdf)
 
+
+  gs -dNOPAUSE -dBATCH -dSAFER \
+   -sDEVICE=pdfwrite \
+   -dCompatibilityLevel=1.4 \
+   -dPDFSETTINGS=/printer \
+   -dDetectDuplicateImages=true \
+   -dCompressFonts=true \
+   -dAutoFilterColorImages=true \
+   -dAutoFilterGrayImages=true \
+   -dColorImageDownsampleType=/Bicubic \
+   -dColorImageResolution=200 \
+   -dGrayImageDownsampleType=/Bicubic \
+   -dGrayImageResolution=200 \
+   -dMonoImageDownsampleType=/Subsample \
+   -dMonoImageResolution=600 \
+   -sOutputFile="$tmp_pdf" "$in_file" >/dev/null 2>&1
+
+    log_info "  [3/3] Simpan hasil akhir..."
+    mv "$tmp_pdf" "$out_file"
+
+}
+compress_aggresive(){
+  local in_file="$1"; local out_file="$2"; local dpi="${3:-200}"
+  local tmp_pdf=$(mktemp /tmp/pdf_scan_compress.XXXXXX.pdf)
+
+
+  gs -dNOPAUSE -dBATCH -dSAFER \
+   -sDEVICE=pdfwrite \
+   -dCompatibilityLevel=1.4 \
+   -dPDFSETTINGS=/screen \
+   -dDetectDuplicateImages=true \
+   -dCompressFonts=false \
+   -dAutoFilterColorImages=true \
+   -dAutoFilterGrayImages=true \
+   -dColorImageDownsampleType=/Bicubic \
+   -dColorImageResolution=100 \
+   -dGrayImageDownsampleType=/Bicubic \
+   -dGrayImageResolution=100 \
+   -dMonoImageDownsampleType=/Subsample \
+   -dMonoImageResolution=150 \
+   -dColorImageFilter=/DCTEncode \
+   -dGrayImageFilter=/DCTEncode \
+   -dJPEGQ=75 \
+    -sOutputFile="$tmp_pdf" "$in_file" >/dev/null 2>&1
+
+    log_info "  [3/3] Simpan hasil akhir..."
+    mv "$tmp_pdf" "$out_file"
+
+}
+compress_moderate(){
+   local in_file="$1"; local out_file="$2"; local dpi="${3:-200}"
+  local tmp_pdf=$(mktemp /tmp/pdf_scan_compress.XXXXXX.pdf)
+
+
+   gs -dNOPAUSE -dBATCH -dSAFER \
+   -sDEVICE=pdfwrite \
+   -dCompatibilityLevel=1.4 \
+   -dPDFSETTINGS=/ebook \
+   -dDetectDuplicateImages=true \
+   -dCompressFonts=false \
+   -dAutoFilterColorImages=true \
+   -dAutoFilterGrayImages=true \
+   -dColorImageDownsampleType=/Bicubic \
+   -dColorImageResolution=$dpi \
+   -dGrayImageDownsampleType=/Bicubic \
+   -dGrayImageResolution=$dpi \
+   -dMonoImageDownsampleType=/Subsample \
+   -dMonoImageResolution=300 \
+   -dColorImageFilter=/DCTEncode \
+   -dGrayImageFilter=/DCTEncode \
+   -dJPEGQ=85 \
+   -sOutputFile="$tmp_pdf" "$in_file" >/dev/null 2>&1
+
+    log_info "  [3/3] Simpan hasil akhir..."
+    mv "$tmp_pdf" "$out_file"
+
+}
 auto_size_limit(){
     local file="$1"; local max_size="${2:-$DEFAULT_MAX_SIZE}"; local dpi_start="${3:-300}"
     local size_bytes; size_bytes=$(stat -c%s "$file")
@@ -224,7 +304,7 @@ if [[ "$MODE_MAIN" == "sanitize" ]]; then
     [[ "${5:-}" == --max-size=* ]] && MAX_SIZE="${5#--max-size=}" || MAX_SIZE="$DEFAULT_MAX_SIZE"
   fi
 elif [[ "$MODE_MAIN" ==  "compress" ]]; then
-  if [[ "${2:-}" == "auto" || "${2-}" == "scan" ]]; then
+  if [[ "${2:-}" == "auto" || "${2:-}" == "scan" || "${2:-}" == "light" || "${2:-}" == "moderate" || "${2:-}" == "aggresive" ]]; then
     MODE_SUB="$2"; INPUT="$3"; OUTPUT="$4"; QUALITY="${5:-$DEFAULT_QUALITY}"
     [[ "${6:-}" == --max-size=* ]] && MAX_SIZE="${6#--max-size=}" || MAX_SIZE="$DEFAULT_MAX_SIZE"
   else
@@ -261,7 +341,10 @@ case "$MODE_MAIN" in
     case "$MODE_SUB" in
       auto)  auto_size_limit "$OUTPUT" "$MAX_SIZE" 300 ;;
       scan) compress_scan "$INPUT" "$OUTPUT" 200 ;;
-      *) log_error "Mode Compress harus 'auto' | 'scan'"; exit 1;;
+      light) compress_light "$INPUT" "$OUTPUT" 200 ;;
+      moderate) compress_moderate "$INPUT" "$OUTPUT" 200 ;;
+      aggresive) compress_aggresive "$INPUT" "$OUTPUT" 200 ;;
+      *) log_error "Mode Compress harus 'auto' | 'scan' | 'light' | 'moderate' | 'aggresive' "; exit 1;;
     esac
     ;;
 esac

@@ -1,1 +1,4 @@
 cleanPDF.sh
+rename.sh
+docker-cleanpdf.sh
+Dockerfile
